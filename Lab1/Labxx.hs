@@ -5,55 +5,48 @@ import System.Random
 import Criterion.Main
 import Control.Parallel
 import Control.Parallel.Strategies
-import Control.Monad.Par hiding (parMap)
---import Control.DeepSeq
-
+import Control.Monad.Par
 
 -- code borrowed from the Stanford Course 240h (Functional Systems in Haskell)
 -- I suspect it comes from Bryan O'Sullivan, author of Criterion
 
 data T a = T !a !Int
 
--- * Parallel jacknife, calling the strictly parallel map.
-parjack :: (([a] -> b) -> [[a]] -> [b]) -> ([a] -> b) -> [a] -> [b]
-parjack mapfun f = mapfun f . resamples 500
-
+-- | Parallel jackknife taking a parallel mapping function as an extra
+-- argument.
+parJack :: (([a] -> b) -> [[a]] -> [b]) -> ([a] -> b) -> [a] -> [b]
+parJack mapf f = mapf f . resamples 500
 
 -- | Parallel construct, using Control.Parallel (par,pseq),
 -- just sparks til the end of time.
-------------------------------------------------------------------------------
-parPseqMap :: (a -> b) -> [a] -> [b]
-parPseqMap f [] = []
-parPseqMap f (x:xs) = par first $
-               pseq rest
-                (first : rest)
+parMapPseq :: (a -> b) -> [a] -> [b]
+parMapPseq f []     = []
+parMapPseq f (x:xs) = y `par` ys `pseq` y:ys
   where
-    first = f x
-    --middle = parmap f (take  (length xs `div` 2) xs)
-    rest = parPseqMap f xs -- (drop  (length xs `div` 2) xs)
+    y = f x
+    ys = parMapPseq f xs
 
--- | Eval monad parallel map.
-------------------------------------------------------------------------------
-evalMap :: (a -> b) -> [a] -> [b]
-evalMap _ [] = []
-evalMap f (x:xs) = runEval $ do
-  first <- rpar (f x)
-  rest  <- rseq (evalMap f xs)
-  return (first : rest)
+-- | Parallel map utilizing the Eval monad.
+parMapEval :: (a -> b) -> [a] -> [b]
+parMapEval _ []     = []
+parMapEval f (x:xs) = runEval $ do
+  y  <- rpar (f x)
+  ys <- rseq (parMapEval f xs)
+  return $ y:ys
 
--- | Par Monad implementation
-------------------------------------------------------------------------------
-parMonadMapM :: NFData b => (a -> b) -> [a] -> Par [b]
-parMonadMapM _ [] = return []
-parMonadMapM f xs = do
+-- | Implementation of a monadic parallel map using the Par monad. The result
+-- is still wrapped inside tha Par monad.
+parMapParM :: NFData b => (a -> b) -> [a] -> Par [b]
+parMapParM _ [] = return []
+parMapParM f xs = do
   is <- sequence . replicate (length xs) $ new 
   let ys = map f xs
   sequence $ map fork $ zipWith put is ys
   mapM get is
-  
 
-parMonadMap :: NFData b => (a -> b) -> [a] -> [b]
-parMonadMap f = runPar. parMonadMapM f
+-- | Implementation of map using the Par monad.  
+parMapPar :: NFData b => (a -> b) -> [a] -> [b]
+parMapPar f = runPar. parMapParM f
 
 -- | Strategy implemenation
 ------------------------------------------------------------------------------
@@ -63,9 +56,10 @@ parList' :: Strategy' a -> Strategy' [a]
 parList' s [] = ()
 parList' s (x:xs) = s x `par` parList' s xs
 
-stratMap ::(a -> b) -> [a] -> [b]
-stratMap f xs = map f xs `using` parList rwhnf 
+parMapStrat ::(a -> b) -> [a] -> [b]
+parMapStrat f xs = map f xs `using` parList rwhnf 
 
+-- * Predefined funtions
 ------------------------------------------------------------------------------
 mean :: (RealFrac a) => [a] -> a
 mean = fini . foldl' go (T 0 0)
@@ -74,7 +68,6 @@ mean = fini . foldl' go (T 0 0)
     go (T m n) x = T m' n'
       where m' = m + (x - m) / fromIntegral n'
             n' = n + 1
-
 
 resamples :: Int -> [a] -> [[a]]
 resamples k xs =
@@ -85,8 +78,10 @@ resamples k xs =
 jackknife :: ([a] -> b) -> [a] -> [b]
 jackknife f = map f . resamples 500
 
-
 crud = zipWith (\x a -> sin (x / 300)**2 + a) [0..]
+
+-- * Implementation of different test cases in main
+------------------------------------------------------------------------------
 
 main = do
   let (xs,ys) = splitAt 1500  (take 6000
@@ -100,10 +95,10 @@ main = do
   putStrLn $ "jack mean min:  " ++ show (minimum j)
   putStrLn $ "jack mean max:  " ++ show (maximum j)
   defaultMain
-        [ bench "jackknife" (nf (jackknife  mean) rs)
-        , bench "parjack" (nf (parjack parPseqMap mean) rs)
-        , bench "evaljack" (nf (parjack evalMap mean) rs)
-        , bench "stratjack" (nf (parjack stratMap mean) rs)
-        , bench "parMonadjack" (nf (parjack parMonadMap mean) rs)
+        [ bench "sequential" (nf (jackknife           mean) rs)
+        , bench "par, pseq"  (nf (parJack parMapPseq  mean) rs)
+        , bench "Eval monad" (nf (parJack parMapEval  mean) rs)
+        , bench "strategies" (nf (parJack parMapStrat mean) rs)
+        , bench "Par monad"  (nf (parJack parMapPar   mean) rs)
         ]
 
