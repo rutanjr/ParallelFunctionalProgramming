@@ -10,6 +10,9 @@ import Control.Monad.Par
 -- code borrowed from the Stanford Course 240h (Functional Systems in Haskell)
 -- I suspect it comes from Bryan O'Sullivan, author of Criterion
 
+-- * Assigment 1
+------------------------------------------------------------------------------
+
 data T a = T !a !Int
 
 -- | Parallel jackknife taking a parallel mapping function as an extra
@@ -57,7 +60,7 @@ parList' s [] = ()
 parList' s (x:xs) = s x `par` parList' s xs
 
 parMapStrat ::(a -> b) -> [a] -> [b]
-parMapStrat f xs = map f xs `using` parList rwhnf 
+parMapStrat f xs = map f xs `using` parList rseq--rwhnf 
 
 -- * Predefined funtions
 ------------------------------------------------------------------------------
@@ -102,3 +105,23 @@ main = do
         , bench "Par monad"  (nf (parJack parMapPar   mean) rs)
         ]
 
+-- * Assigment 2
+------------------------------------------------------------------------------
+
+merge :: Ord a => [a] -> [a] -> [a]
+merge [] ys = ys
+merge xs [] = xs
+merge (x:xs) (y:ys) =
+  if x <= y
+  then x : merge xs (y:ys)
+  else y : merge (x:xs) ys
+
+mergeSort :: Ord a => [a] -> [a]
+mergeSort []  = []
+mergeSort [x] = [x]
+mergeSort xs  = merge (mergeSort ys) (mergeSort zs)
+  where
+    (ys,zs) = splitAt n xs
+    n = length xs `div` 2
+
+    
