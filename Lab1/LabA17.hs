@@ -3,6 +3,8 @@ module Main where
 import Data.List
 import System.Random
 import Criterion.Main
+import Test.QuickCheck
+import Control.Monad (replicateM)
 import Control.Parallel
 import Control.Parallel.Strategies
 import Control.Monad.Par
@@ -42,9 +44,9 @@ parMapEval f (x:xs) = runEval $ do
 parMapParM :: NFData b => (a -> b) -> [a] -> Par [b]
 parMapParM _ [] = return []
 parMapParM f xs = do
-  is <- sequence . replicate (length xs) $ new 
+  is <- replicateM (length xs) new 
   let ys = map f xs
-  sequence $ map fork $ zipWith put is ys
+  mapM_ fork $ zipWith put is ys
   mapM get is
 
 -- | Implementation of map using the Par monad.  
@@ -108,6 +110,7 @@ main = do
 -- * Assigment 2
 ------------------------------------------------------------------------------
 
+-- | Merge of two sorted lists
 merge :: Ord a => [a] -> [a] -> [a]
 merge [] ys = ys
 merge xs [] = xs
@@ -116,12 +119,29 @@ merge (x:xs) (y:ys) =
   then x : merge xs (y:ys)
   else y : merge (x:xs) ys
 
+-- | Sequential merge sort.
 mergeSort :: Ord a => [a] -> [a]
-mergeSort []  = []
-mergeSort [x] = [x]
-mergeSort xs  = merge (mergeSort ys) (mergeSort zs)
+mergeSort xs | length xs < 2 = xs
+             | otherwise     = merge (mergeSort ys) (mergeSort zs)
   where
-    (ys,zs) = splitAt n xs
-    n = length xs `div` 2
+    (ys,zs) = splitAt (length xs `div` 2) xs
 
-    
+-- | Checks if a list if sorted 
+isSorted :: Ord a => [a] -> Bool
+isSorted [] = True
+isSorted xs = and $ zipWith (<=) (init xs) (tail xs)
+
+-- | Property that mergeSort sorts its input.
+prop_mergeSorted :: Ord a => [a] -> Bool
+prop_mergeSorted = isSorted . mergeSort
+
+parMergeSortPar :: (NFData a, Ord a) => Int -> [a] -> [a]
+parMergeSortPar n xs | length xs < n = mergeSort xs
+                     | otherwise     = runPar $ do
+  let (ys,zs) = splitAt (length xs `div` 2) xs
+  i <- spawn $ return $ parMergeSortPar n ys
+  j <- spawn $ return $ parMergeSortPar n zs
+  ys' <- get i
+  zs' <- get j
+  return $ merge ys' zs'
+
