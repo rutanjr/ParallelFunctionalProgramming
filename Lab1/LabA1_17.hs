@@ -102,7 +102,7 @@ main = do
   defaultMain
         [ bench "sequential" (nf (jackknife           mean) rs)
         , bench "par, pseq"  (nf (parJack parMapPseq  mean) rs)
-        , bench "Eval monad" (nf (parJack parMapEval  mean) rs)
+        , bench "Evalmonad" (nf (parJack parMapEval  mean) rs)
         , bench "strategies" (nf (parJack parMapStrat mean) rs)
         , bench "Par monad"  (nf (parJack parMapPar   mean) rs)
         ]

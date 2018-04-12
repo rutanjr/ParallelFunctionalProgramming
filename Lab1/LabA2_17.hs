@@ -8,6 +8,7 @@ import Control.Monad (replicateM)
 import Control.Parallel
 import Control.Parallel.Strategies
 import Control.Monad.Par
+import Control.DeepSeq
 
 -- * Assigment 2
 ------------------------------------------------------------------------------
@@ -47,13 +48,12 @@ parMergeSortPar n xs | length xs < n = mergeSort xs
   zs' <- get j
   return $ merge ys' zs'
 
-parMergeSortEval :: (NFData a, Ord a) => [a] -> [a]
-parMergeSortEval xs = runEval $ do
+parMergeSortEval :: (NFData a, Ord a) => Int -> [a] -> [a]
+parMergeSortEval n xs | length xs < n = mergeSort xs
+                      | otherwise     = runEval $ do
   let (ys,zs) = splitAt (length xs `div` 2) xs
-  ys' <- rpar (parMergeSortEval ys)
-  zs' <- rpar (parMergeSortEval zs)
-  rseq ys'
-  rseq zs'
+  ys' <- rpar $ force (parMergeSortEval n ys)
+  zs' <- rseq $ force (parMergeSortEval n zs)
   return $ merge ys' zs'
 
 parMergeSortGran :: (NFData a, Ord a) => Int -> ([a] -> [a]) -> [a] -> [a]
@@ -64,8 +64,10 @@ parMergeSortGran n psort xs | length xs < n = mergeSort xs
 ------------------------------------------------------------------------------
 
 main = do
-  let xs = (take 6000 (randoms (mkStdGen 211570155)) :: [Float] )
+  let xs = (take 100000 (randoms (mkStdGen 211570155)) :: [Float] )
+      n = 5000  
   defaultMain
-    [ bench "sequential" (nf mergeSort xs)
-    , bench "par monad" (nf (parMergeSortPar 1000) xs)
+    [ bench "Sequential" (nf mergeSort xs)
+    , bench ("ParMonad " ++ show n) (nf (parMergeSortPar n) xs)
+    , bench ("EvalMonad " ++ show n) (nf (parMergeSortEval n) xs)
     ]
