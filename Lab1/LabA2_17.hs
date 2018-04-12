@@ -38,6 +38,8 @@ isSorted xs = and $ zipWith (<=) (init xs) (tail xs)
 prop_mergeSorted :: Ord a => [a] -> Bool
 prop_mergeSorted = isSorted . mergeSort
 
+
+-- | Parallel mergesort using the Par monad.
 parMergeSortPar :: (NFData a, Ord a) => Int -> [a] -> [a]
 parMergeSortPar n xs | length xs < n = mergeSort xs
                      | otherwise     = runPar $ do
@@ -48,6 +50,7 @@ parMergeSortPar n xs | length xs < n = mergeSort xs
   zs' <- get j
   return $ merge ys' zs'
 
+-- | Parallel mergesort using the Eval monad.
 parMergeSortEval :: (NFData a, Ord a) => Int -> [a] -> [a]
 parMergeSortEval n xs | length xs < n = mergeSort xs
                       | otherwise     = runEval $ do
@@ -55,16 +58,12 @@ parMergeSortEval n xs | length xs < n = mergeSort xs
   ys' <- rpar $ force (parMergeSortEval n ys)
   zs' <- rseq $ force (parMergeSortEval n zs)
   return $ merge ys' zs'
-
-parMergeSortGran :: (NFData a, Ord a) => Int -> ([a] -> [a]) -> [a] -> [a]
-parMergeSortGran n psort xs | length xs < n = mergeSort xs
-                            | otherwise     = psort xs
-
+  
 -- * Main method for testing
 ------------------------------------------------------------------------------
 
 main = do
-  let xs = (take 100000 (randoms (mkStdGen 211570155)) :: [Float] )
+  let xs = take 100000 (randoms (mkStdGen 211570155)) :: [Float] 
       n = 5000  
   defaultMain
     [ bench "Sequential" (nf mergeSort xs)
