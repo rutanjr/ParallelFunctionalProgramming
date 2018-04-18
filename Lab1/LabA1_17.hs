@@ -3,8 +3,6 @@ module Main where
 import Data.List
 import System.Random
 import Criterion.Main
-import Test.QuickCheck
-import Control.Monad (replicateM)
 import Control.Parallel
 import Control.Parallel.Strategies
 import Control.Monad.Par
@@ -37,6 +35,7 @@ parMapEval _ []     = []
 parMapEval f (x:xs) = runEval $ do
   y  <- rpar (f x)
   ys <- rseq (parMapEval f xs)
+  rseq y
   return $ y:ys
 
 -- | Implementation of a monadic parallel map using the Par monad. The result
@@ -44,9 +43,7 @@ parMapEval f (x:xs) = runEval $ do
 parMapParM :: NFData b => (a -> b) -> [a] -> Par [b]
 parMapParM _ [] = return []
 parMapParM f xs = do
-  is <- replicateM (length xs) new 
-  let ys = map f xs
-  mapM_ fork $ zipWith put is ys
+  is <- mapM (spawn . return .f) xs
   mapM get is
 
 -- | Implementation of map using the Par monad.  
@@ -102,7 +99,7 @@ main = do
   defaultMain
         [ bench "sequential" (nf (jackknife           mean) rs)
         , bench "par, pseq"  (nf (parJack parMapPseq  mean) rs)
-        , bench "Evalmonad" (nf (parJack parMapEval  mean) rs)
+        , bench "Evalmonad"  (nf (parJack parMapEval  mean) rs)
         , bench "strategies" (nf (parJack parMapStrat mean) rs)
         , bench "Par monad"  (nf (parJack parMapPar   mean) rs)
         ]
