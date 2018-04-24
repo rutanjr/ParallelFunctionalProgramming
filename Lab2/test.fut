@@ -17,15 +17,13 @@ let subt ((n : i32), (m : i32)) : i32 =
 let process (a: []i32) (b : []i32) : i32 =
   reduce max 0 (map abs (map (subt) (zip a b)))
 
-let length (list : []i32) : i32 = 
-  reduce (+) 0 (map (\x -> 1) list)
+--let length (list : []i32) : i32 = 
+--  reduce (+) 0 (map (\x -> 1) list)
 
 let max' ((n : i32),(i : i32)) ((m : i32), (i' : i32)) : (i32, i32) =
   if n < m then (m, i') else (n, i)
 
-let process_idx (a: []i32) (b : []i32) : (i32, i32) =
-  let vals = (map abs (map (subt) (zip a b)))
-  let id_vals = zip vals [0..<(length vals)]
-  in reduce max' (0,-1) id_vals
+let process_idx [n] (a: [n]i32) (b : [n]i32) : (i32, i32) =
+  reduce (\(x,i) (y,j) -> if x < y then (y, j) else (x,i)) (0,-1) (zip (map abs (map (subt) (zip a b))) (iota n))
 
-let main (a : []i32) (b : []i32) : i32 = process_idx a b
+let main (a : []i32) (b : []i32) : (i32,i32) = process_idx a b
