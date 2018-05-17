@@ -1,5 +1,6 @@
 -module(sudoku).
 %-include_lib("eqc/include/eqc.hrl").
+-import(par_sudoku,[par_solve/2]).
 -compile(export_all).
 
 %% %% generators
@@ -77,6 +78,16 @@ fill(M) ->
 	      Nine
       end
       || X <- Row]
+     || Row <- M].
+
+% TEMP
+unfill(M) ->
+    [[if is_list(X) ->
+	      0;
+	 true ->
+	      X
+      end
+       || X <- Row]  
      || Row <- M].
 
 parmap(Fun,List) ->
@@ -312,13 +323,14 @@ receive_solutions(Ref,N) ->
 	{Ref,no_solution} -> exit(no_solution);	     
 	{Ref,Sol} -> [Sol|receive_solutions(Ref,N-1)]
     end.
-     
+
+ 
 
 %% benchmarks
 
--define(EXECUTIONS,100).
+-define(EXECUTIONS,10).
 
-bm(F,Name) ->
+bm(F) ->
     {T,_} = timer:tc(?MODULE,repeat,[F]),
     T/?EXECUTIONS/1000.
 
@@ -326,17 +338,23 @@ repeat(F) ->
     [F() || _ <- lists:seq(1,?EXECUTIONS)].
 
 benchmarks(Puzzles) ->
-    [{Name,bm(fun()->solve(M) end,Name)} || {Name,M} <- Puzzles].
-
+    [{Name,bm(fun()-> solve(M) end)} || {Name,M} <- Puzzles].
 benchmarks() ->
-  {ok,Puzzles} = file:consult("problems_all.txt"),
-  timer:tc(?MODULE,benchmarks,[Puzzles]).
+  {ok,Puzzles} = file:consult("problems.txt"),
+  timer:tc(?MODULE,benchmarks,[Puzzles]).    
+
+par_benchmarks(N,Puzzles) ->    
+    [{Name,bm(fun()-> par_solve(M,N) end)} || {Name,M} <- Puzzles].
+par_benchmarks(N) ->
+    {ok,Puzzles} = file:consult("problems.txt"),
+    T = timer:tc(?MODULE,par_benchmarks,[N,Puzzles]),
+    master ! exit, T.    
 
 parbenchmarks(Puzzles) ->
     Parent = self(),
     [spawn_link(
        fun () -> 
-         Parent ! {Name,bm(fun() -> solve(M) end,Name)}
+         Parent ! {Name,bm(fun() -> solve(M) end)}
        end) 
      || {Name,M} <- Puzzles],
     [receive {Name,Sol} -> {Name,Sol} end || {Name,_} <- Puzzles].
