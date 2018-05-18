@@ -23,7 +23,10 @@ start_pool(N) ->
 worker(Pid) ->
     receive 
 	{work,Ref,Receiver,Mod,Fun,Args} ->
-	    Ans = apply(Mod,Fun,Args),
+	    Ans = case catch apply(Mod,Fun,Args) of
+		{'EXIT',Msg} -> Msg;
+		X -> X
+	    end,
 	    Receiver ! {done,Ref,Ans},
 	    Pid ! {done,self()},
 	    % io:format("~w sent done to ~w~n",[self(),Pid]),
@@ -33,16 +36,6 @@ worker(Pid) ->
 
 pool(Pid,N,Workers,All) ->
     receive
-	{global, Msg} -> 
-	    [W ! Msg || W <- Workers], 
-	    pool(Pid,N,Workers,All);
-	print -> 
-	    io:format("~w has ~w workers~n",[Pid,N]),
-	    pool(Pid,N,Workers,All);
-	exit -> 
-	    [W ! exit || W <- All], 
-	    io:format("shutting down pool~n"),
-	    exit(shutting_down_pool);
 	{done, W} -> 
 	    pool(Pid,N+1,[W|Workers],All);
 	{get_worker,Sender} ->
@@ -53,5 +46,15 @@ pool(Pid,N,Workers,All) ->
 		[W|Ws] -> 
 		    Sender ! {worker,W}, 
 		    pool(Pid,N-1,Ws,All)			 
-	    end
+	    end;
+	{global, Msg} -> 
+	    [W ! Msg || W <- Workers], 
+	    pool(Pid,N,Workers,All);
+	exit -> 
+	    [W ! exit || W <- All], 
+	    % io:format("shutting down pool~n"),
+	    exit(shutting_down_pool);
+	print -> 
+	    io:format("~w has ~w workers~n",[Pid,N]),
+	    pool(Pid,N,Workers,All)
     end.

@@ -243,6 +243,14 @@ guesses(M) ->
 	      not is_exit(NewM)]),
     [G || {_,G} <- SortedGuesses].
 
+guesses_hard(M) ->
+    {I,J,Guesses} = guess(M),
+    Ms = [catch refine(update_element(M,I,J,G)) || G <- Guesses],
+    lists:sort(
+      [{hard(NewM),NewM}
+       || NewM <- Ms,
+	  not is_exit(NewM)]).
+
 par_guesses(M,N) ->
     {I,J,Guesses} = guess(M),
     Parent = self(),
@@ -330,6 +338,9 @@ receive_solutions(Ref,N) ->
 
 -define(EXECUTIONS,10).
 
+geomean({_,Rs}) ->
+    math:sqrt(lists:sum([math:pow(R,2) || {_,R} <- Rs])).    
+
 bm(F) ->
     {T,_} = timer:tc(?MODULE,repeat,[F]),
     T/?EXECUTIONS/1000.
@@ -347,8 +358,8 @@ par_benchmarks(N,Puzzles) ->
     [{Name,bm(fun()-> par_solve(M,N) end)} || {Name,M} <- Puzzles].
 par_benchmarks(N) ->
     {ok,Puzzles} = file:consult("problems.txt"),
-    T = timer:tc(?MODULE,par_benchmarks,[N,Puzzles]),
-    master ! exit, T.    
+    T = timer:tc(?MODULE,par_benchmarks,[N,Puzzles]).
+%    master ! exit, T.    
 
 parbenchmarks(Puzzles) ->
     Parent = self(),
