@@ -280,7 +280,7 @@ update_nth(I,X,Xs) ->
 %% solve a puzzle
 
 solve(M) ->
-    Solution = par_solve_refined(refine(fill(M)),2),
+    Solution = solve_refined(refine(fill(M))),
     % Solution = solve_refined(refine(fill(M))),
     case valid_solution(Solution) of
 	true ->
@@ -336,7 +336,7 @@ receive_solutions(Ref,N) ->
 
 %% benchmarks
 
--define(EXECUTIONS,10).
+-define(EXECUTIONS,100).
 
 geomean({_,Rs}) ->
     math:sqrt(lists:sum([math:pow(R,2) || {_,R} <- Rs])).    
@@ -358,10 +358,9 @@ par_benchmarks(N,Puzzles) ->
     [{Name,bm(fun()-> par_solve(M,N) end)} || {Name,M} <- Puzzles].
 par_benchmarks(N) ->
     {ok,Puzzles} = file:consult("problems.txt"),
-    T = timer:tc(?MODULE,par_benchmarks,[N,Puzzles]).
-%    master ! exit, T.    
+    timer:tc(?MODULE,par_benchmarks,[N,Puzzles]).
 
-parbenchmarks(Puzzles) ->
+benchmarks_in_par(Puzzles) ->
     Parent = self(),
     [spawn_link(
        fun () -> 
@@ -369,7 +368,6 @@ parbenchmarks(Puzzles) ->
        end) 
      || {Name,M} <- Puzzles],
     [receive {Name,Sol} -> {Name,Sol} end || {Name,_} <- Puzzles].
-    
 		      
 %% check solutions for validity
 
