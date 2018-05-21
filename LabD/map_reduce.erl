@@ -75,25 +75,11 @@ spawn_reducer(Parent,Reduce,I,Mappeds) ->
 		 KV <- KVs],
     spawn_link(fun() -> Parent ! {self(),reduce_seq(Reduce,Inputs)} end).
 
-
 % worker_pool(Funs) -> [Fun() || Fun <- Funs]
-
-% Modify the parallel map-reduce implementation so that it spawns worker processes on all of your
-% nodes. Measure the performance of the page-ranking algorithm with the original parallel version,
-% and your new distributed version
-
-map_reduce_dist() ->%Map,Reduce,Input) -> 
-    Worker_nodes = nodes(),
-    %Split_input = split_into(2,Input)
-    Parent = self(),
-    Pool = pool(),
-    %Pool = pool(P ).
-    [rpc:call(Node,io,format,[user, "hello" ,[]])|| Node <- Pool].
-
-
+%%%%%%%%%%%%%%%%%%%%%%
 
 pool() ->
-    Nodes = [node()|nodes()].
+    [node()|nodes()].
     % spawn_link(fun() ->
     %     pool(Nodes)
     % end).
@@ -110,9 +96,6 @@ pool([Node|Nodes]) ->
         Pid ! {use_node,Node},
         pool(Nodes)
     end.
-
-
-
 
 % Simply change this to work for my case.
 worker(Pid) ->
