@@ -1,13 +1,13 @@
 -module(worker_pool_dist).
 -export([test/0,worker_pool/2,spawn_workers/1]).
 
-
 %% Takes the functions to be evaluated (Funs) and the number of processes per
 %% node (N).
 worker_pool(Funs,N) ->
     Pid = self(),
     Ref = make_ref(),
     spawn(fun() -> 
+
 		  Workers = spawn_workers(N),
 		  io:format("workers_spawned~n"),
 		  pool(Funs,Ref,Pid,Workers)
@@ -38,7 +38,8 @@ pool(Funs,N,Ref,Sender,Workers,Ys) ->
 spawn_workers(N) ->
     Master = self(),
     Nodes = nodes(),
-    [spawn(Node,fun() -> worker(Master) end) || _ <- lists:seq(1,N),Node <- Nodes].
+    [spawn(Node,fun() -> worker(Master) end) 
+     || _ <- lists:seq(1,N),Node <- Nodes].
     
 worker(Master) ->
     Master ! {work_request,self()},
