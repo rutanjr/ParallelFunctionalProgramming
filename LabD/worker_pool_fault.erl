@@ -18,36 +18,40 @@ worker_pool(Funs,N) ->
     end.
 
 pool(Funs,Ref,Sender,Workers) ->
-    pool(Funs,[],length(Funs),Ref,Sender,Workers,[]).
-pool(_,_,0,Ref,Sender,Workers,Ys) -> 
+    pool(Funs,[],length(Funs),Ref,Sender,Workers,[],[]).
+pool(_,_,0,Ref,Sender,Workers,Idle,Ys) ->  %Added here!
     [W ! exit || W <- Workers],
+   % [I ! exit || I <- Idle], %Added here! 
     Sender ! {Ref,Ys};
-pool(Funs,Active,N,Ref,Sender,Workers,Ys) ->
+pool(Funs,Active,N,Ref,Sender,Workers,Idle,Ys) ->
     receive
 	{'EXIT',_,normal} ->
-	    pool(Funs,Active,N,Ref,Sender,Workers,Ys);
+	    pool(Funs,Active,N,Ref,Sender,Workers,Idle,Ys);
 	{'EXIT',Worker,_} ->
 	    io:format("CRASH: ~w",[Worker]),
 	    Workers_new = lists:delete(Worker,Workers),
+	    Idle_new = lists:delete(Worker, Idle),
 	    case lists:keytake(Worker,1,Active) of
 		false ->
-		    pool(Funs,Active,N,Ref,Sender,Workers_new,Ys);
+		    pool(Funs,Active,N,Ref,Sender,Workers_new,Idle_new,Ys);
 		{value,{_,Fun},Active_new} ->
-		    pool([Fun|Funs],Active_new,N,Ref,Sender,Workers_new,Ys)
+		    [I ! retry || I <- Idle],
+		    pool([Fun|Funs],Active_new,N,Ref,Sender,Workers_new,[],Ys)
 	    end;
 	{work_request,Worker} -> 
+	    % Idle_new = lists:delete(Worker, Idle),
 	    case Funs of
 		[F|Fs] -> 
 		    Worker ! {work,F}, 
-		    pool(Fs,[{Worker,F}|Active],N,Ref,Sender,Workers,Ys);
+		    pool(Fs,[{Worker,F}|Active],N,Ref,Sender,Workers,Idle,Ys);
 		[] -> 
 		    %% FIX REDUNDANCY
-		    % Worker ! exit, 		       
-		    pool([],Active,N,Ref,Sender,Workers,Ys)
+		    % Worker ! retry, 		       
+		    pool([],Active,N,Ref,Sender,Workers,[Worker|Idle],Ys)
 	    end;
 	{done,Worker,Y} -> 
 	    Active_new = lists:keydelete(Worker,1,Active),
-	    pool(Funs,Active_new,N-1,Ref,Sender,Workers,[Y|Ys])
+	    pool(Funs,Active_new,N-1,Ref,Sender,Workers,Idle,[Y|Ys])
     end.
 
 spawn_workers(N) ->
@@ -61,6 +65,8 @@ worker(Master) ->
     receive 
 	{work,F} -> 
 	    Master ! {done,self(),F()},
+	    worker(Master);
+	retry -> 
 	    worker(Master);
 	exit -> exit
     end.
