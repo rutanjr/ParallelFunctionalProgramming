@@ -35,9 +35,20 @@ page_rank_dist(M,R) ->
     map_reduce_dist:map_reduce_dist(fun map/2, M, fun reduce/2, R, 
 			       [{Url,ok} || Url <- Urls]).
 
-page_rank_pool(M,R,N) ->
+%% Redundant decides whether to use the fault tolerant worker pool
+page_rank_pool(M,R,N,Redundant) ->
     dets:open_file(web,[{file,"web.dat"}]),
     Urls = dets:foldl(fun({K,_},Keys)->[K|Keys] end,[],web),
+    Pool = case Redundant of
+	       false -> fun worker_pool_dist:worker_pool/2;
+	       true -> fun worker_pool_fault:worker_pool/2
+	   end,
     map_reduce_pool:map_reduce_pool(fun map/2, M, fun reduce/2, R, 
-			       [{Url,ok} || Url <- Urls],N).
-    
+			       [{Url,ok} || Url <- Urls],Pool,N).
+
+%% Used to save the initial web crawl
+save_crawl(Ubody) ->
+    {ok,File}=dets:open_file("web.dat" ,[]),
+    dets:insert(File, Ubody),
+    dets:close(File).
+

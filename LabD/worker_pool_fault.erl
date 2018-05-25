@@ -1,5 +1,5 @@
 -module(worker_pool_fault).
--export([test/0,worker_pool/2]).
+-export([worker_pool/2]).
 
 %% Takes the functions to be evaluated (Funs) and the number of processes per
 %% node (N).
@@ -12,16 +12,14 @@ worker_pool(Funs,N) ->
 		  io:format("workers_spawned~n~w~n",[Workers]),
 		  pool(Funs,Ref,Pid,Workers)
 	  end),
-    io:format("waiting for response~n"),
     receive
 	{Ref,Ans} -> Ans
     end.
 
 pool(Funs,Ref,Sender,Workers) ->
     pool(Funs,[],length(Funs),Ref,Sender,Workers,[],[]).
-pool(_,_,0,Ref,Sender,Workers,Idle,Ys) ->  %Added here!
+pool(_,_,0,Ref,Sender,Workers,_,Ys) ->  %Added here!
     [W ! exit || W <- Workers],
-   % [I ! exit || I <- Idle], %Added here! 
     Sender ! {Ref,Ys};
 pool(Funs,Active,N,Ref,Sender,Workers,Idle,Ys) ->
     receive
@@ -39,14 +37,11 @@ pool(Funs,Active,N,Ref,Sender,Workers,Idle,Ys) ->
 		    pool([Fun|Funs],Active_new,N,Ref,Sender,Workers_new,[],Ys)
 	    end;
 	{work_request,Worker} -> 
-	    % Idle_new = lists:delete(Worker, Idle),
 	    case Funs of
 		[F|Fs] -> 
 		    Worker ! {work,F}, 
 		    pool(Fs,[{Worker,F}|Active],N,Ref,Sender,Workers,Idle,Ys);
 		[] -> 
-		    %% FIX REDUNDANCY
-		    % Worker ! retry, 		       
 		    pool([],Active,N,Ref,Sender,Workers,[Worker|Idle],Ys)
 	    end;
 	{done,Worker,Y} -> 
@@ -70,13 +65,3 @@ worker(Master) ->
 	    worker(Master);
 	exit -> exit
     end.
-
-%% Testing
-test() ->
-    N = 4,
-    M = 1,
-    io:format("making function list~n"),
-    Funs = [fun() -> timer:sleep(5000), {self(),node()} end || _ <- lists:seq(1,N)],
-    timer:tc(?MODULE,worker_pool,[Funs,M]).
-
-    

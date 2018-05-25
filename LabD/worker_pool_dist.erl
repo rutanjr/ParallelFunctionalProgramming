@@ -1,5 +1,5 @@
 -module(worker_pool_dist).
--export([test/0,worker_pool/2,spawn_workers/1]).
+-export([worker_pool/2]).
 
 %% Takes the functions to be evaluated (Funs) and the number of processes per
 %% node (N).
@@ -9,10 +9,8 @@ worker_pool(Funs,N) ->
     spawn(fun() -> 
 
 		  Workers = spawn_workers(N),
-		  io:format("workers_spawned~n"),
 		  pool(Funs,Ref,Pid,Workers)
 	  end),
-    io:format("waiting for response~n"),
     receive
 	{Ref,Ans} -> Ans
     end.
@@ -21,7 +19,6 @@ pool(Funs,Ref,Sender,Workers) ->
     pool(Funs,length(Funs),Ref,Sender,Workers,[]).
 pool(_,0,Ref,Sender,Workers,Ys) -> 
     [W ! exit || W <- Workers],
-    io:format("finished~n"),
     Sender ! {Ref,Ys};
 pool(Funs,N,Ref,Sender,Workers,Ys) ->
     receive
@@ -49,13 +46,3 @@ worker(Master) ->
 	    worker(Master);
 	exit -> exit(exiting)
     end.
-
-%% Testing
-test() ->
-    N = 20,
-    M = 3,
-    io:format("making function list~n"),
-    Funs = [fun() -> timer:sleep(500), {self(),node()} end || _ <- lists:seq(1,N)],
-    timer:tc(?MODULE,worker_pool,[Funs,M]).
-
-    
